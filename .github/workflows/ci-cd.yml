@@ -26,5 +26,3 @@ jobs:
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
-      - name: Deploy no Kubernetes
-        run: kubectl apply -f k8s/
