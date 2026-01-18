@@ -22,7 +22,3 @@ jobs:
         run: docker build -t ${{ secrets.DOCKER_USERNAME }}/hello-java:latest .
       - name: Push da imagem
         run: docker push ${{ secrets.DOCKER_USERNAME }}/hello-java:latest
-      - name: Configurar kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
