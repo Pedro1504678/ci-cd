@@ -1,0 +1,5 @@
+containers:
+  - name: hello
+    image: seu-usario-docker/hello-java:latest
+    ports:
+      - containerPort: 8080
