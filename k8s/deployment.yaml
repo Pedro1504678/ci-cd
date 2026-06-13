@@ -15,7 +15,7 @@ spec:
       serviceAccountName: pedido-sa
       containers:
         - name: pedido-service
-          image: ${ECR}/pedido-service:${IMAGE_TAG}
+          image: ${ECR}:${IMAGE_TAG}
           ports:
             - containerPort: 8080
           env:
