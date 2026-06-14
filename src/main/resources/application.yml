@@ -4,7 +4,21 @@ spring:
       region:
         static: ${AWS_REGION}
   application:
-    name: pedido-service
+    name: orders-service
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI}
+
 server:
   port: 8080
 app:
@@ -12,3 +26,12 @@ app:
     topic-arn: ${SNS_TOPIC_ARN}
   sqs:
     queue-name: ${QUEUE_NAME}
+
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: 86400000
+  cors:
+    allowed-origis: ${CORS_ALLOWED_ORIGINS:*}
+

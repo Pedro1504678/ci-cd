@@ -1,137 +1,137 @@
-name: CI/CD — Build, ECR, EKS + Dynatrace
-
-on:
-  push:
-    branches: [ main ]
-
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-  IMAGE_NAME: pedido-service
-
-jobs:
-
-  # ── JOB 1: Roda os testes ─────────────────────────────────────────────
-  test:
-    name: Testes
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: maven
-
-      - name: Executar testes
-        run: mvn test
-
-  build-and-push:
-    name: Build e Push ECR
-    runs-on: ubuntu-latest
-    needs: test
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configurar credenciais AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login no ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Gerar tag da imagem
-        id: meta
-        run: echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-
-      - name: Build e Push
-        run: |
-          IMAGE=${{ env.ECR_REGISTRY }}:${{ steps.meta.outputs.tag }}
-          docker build -t $IMAGE .
-          docker push $IMAGE
-
-  deploy:
-    name: Deploy EKS + Dynatrace
-    runs-on: ubuntu-latest
-    needs: build-and-push
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configurar credenciais AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Configurar kubectl para o EKS
-        run: |
-          aws eks update-kubeconfig \
-            --name ${{ secrets.EKS_CLUSTER_NAME }} \
-            --region ${{ env.AWS_REGION }}    
-
-      - name: Criar namespace dynatrace
-        run: |
-          kubectl create namespace dynatrace \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-      - name: Criar secret com token do dynatrace
-        run: |
-          kubectl create secret generic dynakube \
-            --from-literal=apiToken=${{ secrets.DT_API_TOKEN }} \
-            --from-literal=dataIngestToken=${{ secrets.DT_DATA_INGEST_TOKEN }} \
-            --namespace dynatrace \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-      - name: Instalar/Atualizar dynatrace operator
-        run: |
-          helm repo add dynatrace \
-            https://raw.githubusercontent.com/Dynatrace/dynatrace-operator/main/config/helm/repos/stable
-          helm repo update
-          helm upgrade --install dynatrace-operator dynatrace/dynatrace-operator \
-            --namespace dynatrace \
-            --atomic \
-            --wait \
-            --timeout 5m
-
-      - name: Debug - versoes do CRD
-        run: |
-          kubectl get crd dynakubes.dynatrace.com -o jsonpath='{range .spec.versions[*]}{.name} served={.served}{"\n"}{end}'    
-
-      - name: Aguardar CRD DynaKube
-        run: kubectl wait --for condition=established crd/dynakubes.dynatrace.com --timeout=60s
-
-      - name: Aplicar DynaKube CR
-        env:
-          DT_TENANT_ID: ${{ secrets.DT_TENANT_ID }}
-        run: |
-          rm -rf ~/.kube/cache/discovery/
-          envsubst < k8s/dynakube.yaml | kubectl apply -f -
-
-      - name: Deploy da aplicação
-        env:
-          ECR: ${{ env.ECR_REGISTRY }}
-          IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
-          SNS_TOPIC_ARN: ${{ secrets.SNS_TOPIC_ARN }}
-          AWS_REGION: ${{ env.AWS_REGION }}
-          QUEUE_NAME: ${{ secrets.QUEUE_NAME }}
-        run: envsubst < k8s/deployment.yaml | kubectl apply -f -
-
-
-      - name: Aplicar Service e ServiceAccount
-        run: |
-          kubectl apply -f k8s/service.yaml
-          kubectl apply -f k8s/serviceaccount.yaml
-
-      - name: Aguardar rollout
-        run: kubectl rollout status deployment/pedido-service --timeout=5m
-
-
-
+#name: CI/CD — Build, ECR, EKS + Dynatrace
+#
+#on:
+#  push:
+#    branches: [ main ]
+#
+#env:
+#  AWS_REGION: ${{ secrets.AWS_REGION }}
+#  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+#  IMAGE_NAME: pedido-service
+#
+#jobs:
+#
+#  # ── JOB 1: Roda os testes ─────────────────────────────────────────────
+#  test:
+#    name: Testes
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Setup Java 17
+#        uses: actions/setup-java@v4
+#        with:
+#          distribution: temurin
+#          java-version: '17'
+#          cache: maven
+#
+#      - name: Executar testes
+#        run: mvn test
+#
+#  build-and-push:
+#    name: Build e Push ECR
+#    runs-on: ubuntu-latest
+#    needs: test
+#    outputs:
+#      image-tag: ${{ steps.meta.outputs.tag }}
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Configurar credenciais AWS
+#        uses: aws-actions/configure-aws-credentials@v4
+#        with:
+#          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#          aws-region: ${{ env.AWS_REGION }}
+#
+#      - name: Login no ECR
+#        uses: aws-actions/amazon-ecr-login@v2
+#
+#      - name: Gerar tag da imagem
+#        id: meta
+#        run: echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+#
+#      - name: Build e Push
+#        run: |
+#          IMAGE=${{ env.ECR_REGISTRY }}:${{ steps.meta.outputs.tag }}
+#          docker build -t $IMAGE .
+#          docker push $IMAGE
+#
+#  deploy:
+#    name: Deploy EKS + Dynatrace
+#    runs-on: ubuntu-latest
+#    needs: build-and-push
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Configurar credenciais AWS
+#        uses: aws-actions/configure-aws-credentials@v4
+#        with:
+#          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#          aws-region: ${{ env.AWS_REGION }}
+#
+#      - name: Configurar kubectl para o EKS
+#        run: |
+#          aws eks update-kubeconfig \
+#            --name ${{ secrets.EKS_CLUSTER_NAME }} \
+#            --region ${{ env.AWS_REGION }}
+#
+#      - name: Criar namespace dynatrace
+#        run: |
+#          kubectl create namespace dynatrace \
+#            --dry-run=client -o yaml | kubectl apply -f -
+#
+#      - name: Criar secret com token do dynatrace
+#        run: |
+#          kubectl create secret generic dynakube \
+#            --from-literal=apiToken=${{ secrets.DT_API_TOKEN }} \
+#            --from-literal=dataIngestToken=${{ secrets.DT_DATA_INGEST_TOKEN }} \
+#            --namespace dynatrace \
+#            --dry-run=client -o yaml | kubectl apply -f -
+#
+#      - name: Instalar/Atualizar dynatrace operator
+#        run: |
+#          helm repo add dynatrace \
+#            https://raw.githubusercontent.com/Dynatrace/dynatrace-operator/main/config/helm/repos/stable
+#          helm repo update
+#          helm upgrade --install dynatrace-operator dynatrace/dynatrace-operator \
+#            --namespace dynatrace \
+#            --atomic \
+#            --wait \
+#            --timeout 5m
+#
+#      - name: Debug - versoes do CRD
+#        run: |
+#          kubectl get crd dynakubes.dynatrace.com -o jsonpath='{range .spec.versions[*]}{.name} served={.served}{"\n"}{end}'
+#
+#      - name: Aguardar CRD DynaKube
+#        run: kubectl wait --for condition=established crd/dynakubes.dynatrace.com --timeout=60s
+#
+#      - name: Aplicar DynaKube CR
+#        env:
+#          DT_TENANT_ID: ${{ secrets.DT_TENANT_ID }}
+#        run: |
+#          rm -rf ~/.kube/cache/discovery/
+#          envsubst < k8s/dynakube.yaml | kubectl apply -f -
+#
+#      - name: Deploy da aplicação
+#        env:
+#          ECR: ${{ env.ECR_REGISTRY }}
+#          IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+#          SNS_TOPIC_ARN: ${{ secrets.SNS_TOPIC_ARN }}
+#          AWS_REGION: ${{ env.AWS_REGION }}
+#          QUEUE_NAME: ${{ secrets.QUEUE_NAME }}
+#        run: envsubst < k8s/deployment.yaml | kubectl apply -f -
+#
+#
+#      - name: Aplicar Service e ServiceAccount
+#        run: |
+#          kubectl apply -f k8s/service.yaml
+#          kubectl apply -f k8s/serviceaccount.yaml
+#
+#      - name: Aguardar rollout
+#        run: kubectl rollout status deployment/pedido-service --timeout=5m
+#
+#
+#
